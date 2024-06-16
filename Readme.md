@@ -223,7 +223,7 @@ else:
         json.dump([], f, indent=4)
 ```
 
-For the complete script, please refer to the [merge_youtube_music_likes_into_spotify.py](merge_youtube_music_likes_into_spotify.py) file in this repository.
+For the complete script, please refer to the [merge youtube Music likes into Spotify.py](merge_youtube_music_likes_into_spotify.py) file in this repository.
 
 ## License
 

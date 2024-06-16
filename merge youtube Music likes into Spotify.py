@@ -15,15 +15,6 @@ import os
 
 
 # %% [markdown]
-# ## setup display tabular
-
-# %%
-from itables import show, init_notebook_mode
-init_notebook_mode(all_interactive=True)
-import itables.options as opt
-opt.lengthMenu = [2, 5, 10, 20, 50,100,200,500]
-
-# %% [markdown]
 # ## Load credentials
 
 # %%
