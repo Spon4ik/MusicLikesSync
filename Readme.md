@@ -14,7 +14,7 @@ This project aims to synchronize your liked songs from YouTube Music to Spotify.
 
 1. Clone this repository:
     ```bash
-    git clone https://github.com/yourusername/merge-youtube-likes-to-spotify.git
+    git clone https://github.com/Spon4ik/merge-youtube-likes-to-spotify.git
     cd merge-youtube-likes-to-spotify
     ```
 
