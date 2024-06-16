@@ -1,0 +1,10 @@
+Auth/headers_auth.json
+Auth/spotify_credentials.json
+*.csv
+merge youtube Music likes into Spotify.py
+.cache
+data/*.*
+client_secret_*.apps.googleusercontent.com.json
+Auth/token.json
+Auth/ytmusic_oauth.json
+Archive/*
