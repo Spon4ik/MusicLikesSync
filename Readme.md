@@ -1,9 +1,3 @@
-You're right; including the whole script in the README file would be too long and could be overwhelming. Instead, we can provide a concise overview of the project and include essential snippets or steps. For the complete script, we can refer to the actual Python file in the repository.
-
-Here’s how you could structure the README file:
-
----
-
 # Merge YouTube Music Likes into Spotify
 
 This project aims to synchronize your liked songs from YouTube Music to Spotify. The script fetches liked songs from YouTube Music and checks if they are already liked on Spotify. If not, it attempts to add them to your Spotify liked songs, ensuring no duplicates and handling rate limits gracefully.
