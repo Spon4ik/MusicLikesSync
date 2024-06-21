@@ -7,3 +7,6 @@ client_secret_*.apps.googleusercontent.com.json
 Auth/token.json
 Auth/ytmusic_oauth.json
 Archive/*
+merge YouTube Music likes into Spotify script - 20240622A.py
+merge YouTube Music likes into Spotify script - 20240622B.py
+merge YouTube Music likes into Spotify script.py
