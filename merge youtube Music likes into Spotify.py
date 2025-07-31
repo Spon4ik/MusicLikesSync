@@ -137,7 +137,11 @@ def load_added_songs(added_songs_file):
             added_songs_list = json.load(f)
         successfully_added_songs = pd.DataFrame(added_songs_list)
     else:
-        successfully_added_songs = pd.DataFrame(columns=['title', 'artist', 'album'])
+        successfully_added_songs = pd.DataFrame(columns=['title', 'artist', 'album', 'spotify_id'])
+
+    if 'spotify_id' not in successfully_added_songs.columns:
+        successfully_added_songs['spotify_id'] = []
+
     return successfully_added_songs
 
 
@@ -464,6 +468,8 @@ def determine_best_matches(search_results):
 # %%
 def check_if_already_added(spotify_id, added_songs_df):
     """Check if a track with the given spotify_id is already in the added songs list."""
+    if 'spotify_id' not in added_songs_df.columns:
+        return False
     return spotify_id in added_songs_df['spotify_id'].values
 
 
