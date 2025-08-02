@@ -1,0 +1,5 @@
+ytmusicapi
+spotipy
+pandas
+deep-translator
+pytest

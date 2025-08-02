@@ -6,6 +6,7 @@ This project aims to synchronize your liked songs from YouTube Music to Spotify.
 
 - [Installation](#installation)
 - [Usage](#usage)
+- [Testing](#testing)
 - [Setup YouTube Music API Authentication](#setup-youtube-music-api-authentication)
 - [Script Breakdown](#script-breakdown)
 - [License](#license)
@@ -44,6 +45,14 @@ This project aims to synchronize your liked songs from YouTube Music to Spotify.
     ```bash
     python merge_youtube_music_likes_into_spotify.py
     ```
+
+## Testing
+
+After installing the dependencies, run the test suite with:
+
+```bash
+pytest
+```
 
 ## Setup YouTube Music API Authentication
 
