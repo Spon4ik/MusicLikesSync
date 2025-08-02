@@ -132,15 +132,28 @@ def read_or_fetch_spotify_likes(sp, file_path='data/spotify_likes.json'):
 # %%
 # Load previously added songs from JSON file if it exists
 def load_added_songs(added_songs_file):
+    """Load songs that were successfully added in previous runs.
+
+    Ensures the returned DataFrame always contains the columns
+    ``title``, ``artist``, ``album`` and ``spotify_id`` so that other
+    functions can rely on their presence.  When the JSON file does not
+    exist, an empty DataFrame with these columns is returned.
+    """
+
+    required_columns = ['title', 'artist', 'album', 'spotify_id']
+
     if os.path.exists(added_songs_file):
-        with open(added_songs_file, 'r') as f:
+        with open(added_songs_file, 'r', encoding='utf-8') as f:
             added_songs_list = json.load(f)
         successfully_added_songs = pd.DataFrame(added_songs_list)
-    else:
-        successfully_added_songs = pd.DataFrame(columns=['title', 'artist', 'album', 'spotify_id'])
 
-    if 'spotify_id' not in successfully_added_songs.columns:
-        successfully_added_songs['spotify_id'] = []
+        # Ensure all required columns are present even if the JSON file is
+        # missing some of them.
+        for col in required_columns:
+            if col not in successfully_added_songs.columns:
+                successfully_added_songs[col] = []
+    else:
+        successfully_added_songs = pd.DataFrame(columns=required_columns)
 
     return successfully_added_songs
 
