@@ -54,7 +54,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=spotify_credentials['cl
 #     json.dump(liked_song, outfile, indent=4)
 
 # %% [markdown]
-# ## defining a functio to fetch an All Liked tracks
+# ## Defining a function to fetch all liked tracks
 
 # %%
 # Fetch liked songs from YouTube Music
