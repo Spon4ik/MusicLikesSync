@@ -13,6 +13,7 @@ from spotipy.oauth2 import SpotifyOAuth
 import difflib
 import time
 import os
+from music_likes_sync.legacy import decide_legacy_item
 
 # %% [markdown]
 # # Load credentials
@@ -63,14 +64,18 @@ def fetch_youtube_music_likes(ytmusic):
     songs = []
     for song in liked_songs['tracks']:
         title = song.get('title', 'Unknown Title')
-        artist_name = song['artists'][0]['name'] if song.get('artists') and len(song['artists']) > 0 else 'Unknown Artist'
+        artists = [artist.get('name', '') for artist in song.get('artists', []) if artist.get('name')]
+        artist_name = ', '.join(artists) if artists else 'Unknown Artist'
         album = song.get('album')
-        album_name = album['name'] if album else 'Unknown Album'
+        album_name = album.get('name', 'Unknown Album') if album else 'Unknown Album'
         
         songs.append({
             'title': title,
             'artist': artist_name,
-            'album': album_name
+            'album': album_name,
+            'videoId': song.get('videoId', ''),
+            'duration': song.get('duration', ''),
+            'duration_seconds': song.get('duration_seconds')
         })
     return pd.DataFrame(songs)
 
@@ -87,9 +92,11 @@ def fetch_spotify_likes(sp):
             track = item['track']
             songs.append({
                 'title': track['name'],
-                'artist': track['artists'][0]['name'],
+                'artist': ', '.join(artist['name'] for artist in track.get('artists', [])),
                 'album': track['album']['name'],
-                'spotify_id': track['id']
+                'spotify_id': track['id'],
+                'spotify_duration_ms': track.get('duration_ms'),
+                'spotify_isrc': track.get('external_ids', {}).get('isrc', '')
             })
         if results['next']:
             results = sp.next(results)
@@ -362,7 +369,11 @@ def query_spotify_for_tracks(sp, songs, max_results=50):
                 'spotify_title': '',
                 'spotify_artist': '',
                 'spotify_album': '',
-                'spotify_id': ''
+                'spotify_id': '',
+                'spotify_uri': '',
+                'spotify_url': '',
+                'spotify_duration_ms': None,
+                'spotify_isrc': ''
             })
 
             result = sp.search(q=query, limit=max_results, type='track')
@@ -378,7 +389,12 @@ def query_spotify_for_tracks(sp, songs, max_results=50):
                         'spotify_title': track['name'],
                         'spotify_artist': ', '.join(artist['name'] for artist in track['artists']),
                         'spotify_album': track['album']['name'],
-                        'spotify_id': track['id']
+                        'spotify_id': track['id'],
+                        'spotify_uri': track.get('uri', ''),
+                        'spotify_url': track.get('external_urls', {}).get('spotify', ''),
+                        'spotify_duration_ms': track.get('duration_ms'),
+                        'spotify_isrc': track.get('external_ids', {}).get('isrc', ''),
+                        'spotify_popularity': track.get('popularity', 0)
                     }
                     search_results.append(variant)
 
@@ -387,6 +403,9 @@ def query_spotify_for_tracks(sp, songs, max_results=50):
                 'title': song.get('title', ''),  # Use original title
                 'artist': song.get('artist', ''),  # Use original artist
                 'album': song.get('album', ''),  # Use original album
+                'videoId': song.get('videoId', ''),
+                'duration': song.get('duration', ''),
+                'duration_seconds': song.get('duration_seconds'),
                 'variants': search_results
             })
 
@@ -437,18 +456,8 @@ def calculate_similarity(search_results):
 
 # %%
 def determine_best_matches(search_results):
-    """Determine the best match for each track and store results in JSON."""
-    best_matches = []
-    for item in search_results:
-        best_match = max(item['variants'], key=lambda x: x['similarity_score'], default={'similarity_score': 0})
-        best_matches.append({
-            "original_title": item['title'],
-            "original_artist": item['artist'],
-            "original_album": item['album'],
-            "best_variant": best_match,
-            "status": "selected" if best_match['similarity_score'] > 0.8 else "not selected",
-            "reason": "High similarity score" if best_match['similarity_score'] >= 0.8 else "No match above threshold"
-        })
+    """Determine safe matches for each track and store reviewable results in JSON."""
+    best_matches = [decide_legacy_item(item) for item in search_results]
 
     # Store the best matches in a JSON file for further processing
     with open('data/match_results.json', 'w') as f:
@@ -464,6 +473,8 @@ def determine_best_matches(search_results):
 # %%
 def check_if_already_added(spotify_id, added_songs_df):
     """Check if a track with the given spotify_id is already in the added songs list."""
+    if 'spotify_id' not in added_songs_df.columns:
+        return False
     return spotify_id in added_songs_df['spotify_id'].values
 
 
@@ -479,44 +490,52 @@ logging.basicConfig(filename='migration.log', level=logging.INFO, format='%(asct
 import time
 import logging
 
-def add_tracks_to_spotify(sp, successfully_added_songs):
+def add_tracks_to_spotify(sp, successfully_added_songs, dry_run=True):
     """Add selected tracks to Spotify from best matches and log each attempt."""
     try:
         with open('data/match_results.json', 'r', encoding='utf-8') as f:
             matches = json.load(f)
 
+        results_file = 'data/dry_run_results.json' if dry_run else 'data/added_songs_to_spotify.json'
+
         # Load existing results if the file exists
-        if os.path.exists('data/added_songs_to_spotify.json'):
-            with open('data/added_songs_to_spotify.json', 'r', encoding='utf-8') as f:
+        if os.path.exists(results_file):
+            with open(results_file, 'r', encoding='utf-8') as f:
                 results = json.load(f)
         else:
             results = []
 
         for match in matches:
-            spotify_id = match['best_variant'].get('spotify_id')
+            best_variant = match.get('best_variant') or {}
+            spotify_id = best_variant.get('spotify_id')
             if match['status'] == 'selected' and spotify_id:
                 if not check_if_already_added(spotify_id, successfully_added_songs):
-                    try:
-                        response = sp.current_user_saved_tracks_add(tracks=[spotify_id])
-                        status = 'added' if response is None else 'failed'
-                        reason = 'Successfully added' if response is None else 'Failed to add'
-                        logging.info(f"Added: {match['original_title']} by {match['original_artist']} - {reason}")
-                        time.sleep(1)  # Delay to handle rate limits
-                    except Exception as e:
-                        status = 'failed'
-                        reason = str(e)
-                        logging.error(f"Failed to add: {match['original_title']} by {match['original_artist']} - {reason}")
-                        if "API rate limit exceeded" in str(e):
-                            print("API rate limit exceeded, pausing for 30 seconds...")
-                            time.sleep(30)
-                            # Optionally, retry the failed operation
+                    if dry_run:
+                        status = 'dry-run'
+                        reason = 'Would add to Spotify; dry-run mode did not write'
+                        logging.info(f"Dry run: {match['original_title']} by {match['original_artist']} - {reason}")
+                    else:
+                        try:
+                            response = sp.current_user_saved_tracks_add(tracks=[spotify_id])
+                            status = 'added' if response is None else 'failed'
+                            reason = 'Successfully added' if response is None else 'Failed to add'
+                            logging.info(f"Added: {match['original_title']} by {match['original_artist']} - {reason}")
+                            time.sleep(1)  # Delay to handle rate limits
+                        except Exception as e:
+                            status = 'failed'
+                            reason = str(e)
+                            logging.error(f"Failed to add: {match['original_title']} by {match['original_artist']} - {reason}")
+                            if "API rate limit exceeded" in str(e):
+                                print("API rate limit exceeded, pausing for 30 seconds...")
+                                time.sleep(30)
+                                # Optionally, retry the failed operation
                 else:
                     status = 'not added'
                     reason = 'Track already added'
                     logging.info(f"Already added: {match['original_title']} by {match['original_artist']} - {reason}")
             else:
                 status = 'not attempted'
-                reason = 'Track not selected due to low similarity score or missing Spotify ID'
+                reason = match.get('reason') or 'Track not selected due to low confidence, review status, or missing Spotify ID'
                 logging.warning(f"Not attempted: {match['original_title']} by {match['original_artist']} - {reason}")
 
             # Prepare the log entry
@@ -524,23 +543,28 @@ def add_tracks_to_spotify(sp, successfully_added_songs):
                 "original_title": match['original_title'],
                 "original_artist": match['original_artist'],
                 "original_album": match['original_album'],
-                "query_title": match['best_variant'].get('query_title'),
-                "query_artist": match['best_variant'].get('query_artist'),
-                "query_album": match['best_variant'].get('query_album'),
-                "spotify_title": match['best_variant'].get('spotify_title'),
-                "spotify_artist": match['best_variant'].get('spotify_artist'),
-                "spotify_album": match['best_variant'].get('spotify_album'),
+                "query_title": best_variant.get('query_title'),
+                "query_artist": best_variant.get('query_artist'),
+                "query_album": best_variant.get('query_album'),
+                "spotify_title": best_variant.get('spotify_title'),
+                "spotify_artist": best_variant.get('spotify_artist'),
+                "spotify_album": best_variant.get('spotify_album'),
                 "spotify_id": spotify_id,
-                "similarity_score": match['best_variant'].get('similarity_score', 0),  # Ensure default if not available
+                "spotify_uri": best_variant.get('spotify_uri'),
+                "spotify_url": best_variant.get('spotify_url'),
+                "spotify_duration_ms": best_variant.get('spotify_duration_ms'),
+                "spotify_isrc": best_variant.get('spotify_isrc'),
+                "similarity_score": best_variant.get('similarity_score', match.get('confidence', 0)),
+                "match_status": match.get('status'),
+                "match_method": match.get('match_method'),
                 "status": status,
                 "reason": reason
             }
 
-            if status != 'not attempted':
-                results.append(log_entry)
+            results.append(log_entry)
 
         # Log the results to a JSON file
-        with open('data/added_songs_to_spotify.json', 'w', encoding='utf-8') as f:
+        with open(results_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
 
     except FileNotFoundError:
@@ -599,4 +623,5 @@ best_matches = determine_best_matches(search_results_with_scores)
 # %%
 # Proceed to add tracks to Spotify using these best matches
 successfully_added_songs = load_added_songs(added_songs_file)
-add_tracks_to_spotify(sp, successfully_added_songs)
+WRITE_TO_SPOTIFY = os.environ.get('MUSICLIKESSYNC_WRITE_TO_SPOTIFY', '').lower() in {'1', 'true', 'yes'}
+add_tracks_to_spotify(sp, successfully_added_songs, dry_run=not WRITE_TO_SPOTIFY)
